@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-  
+# eterna_core_2.2.py
+
 from hashlib import sha3_256
 from qiskit import QuantumCircuit, Aer, execute
 from datetime import datetime
