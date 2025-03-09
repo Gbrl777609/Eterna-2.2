@@ -1,0 +1,102 @@
+#!/data/data/com.termux/files/usr/bin/python3
+import sys
+import os
+import curses
+import time
+from bitcoinrpc.authproxy import AuthServiceProxy
+from bip_utils import Bip39MnemonicGenerator, Bip39SeedGenerator, Bip44, Bip44Coins
+
+# Configuración de Éxtesis
+EROTISMO = 0.51  # Nivel de intensidad consensuado
+MI_DIRECCION_BTC = "tu_dirección_btc"  # ♠️ Donde recibirás los fondos
+
+class BTCHunter:
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        self.rpc = self._conectar_nodo()
+        self.paleta_erotica = [
+            curses.COLOR_RED, curses.COLOR_MAGENTA, curses.COLOR_YELLOW
+        ]
+        self._iniciar_ritmo()
+
+    def _conectar_nodo(self):
+        # ♻️ Configura tu nodo Bitcoin completo
+        return AuthServiceProxy(
+            "http://usuario:contraseña@localhost:8332",
+            timeout=300
+        )
+
+    def _iniciar_ritmo(self):
+        curses.start_color()
+        curses.use_default_colors()
+        for i in range(3):
+            curses.init_pair(i+1, self.paleta_erotica[i], -1)
+        self.stdscr.nodelay(1)
+
+    def generar_direccion(self):
+        # 🔄 Generación con ritmo cardíaco variable
+        semilla = Bip39MnemonicGenerator().FromWordsNumber(12)
+        seed = Bip39SeedGenerator(semilla).Generate()
+        bip44_ctx = Bip44.FromSeed(seed, Bip44Coins.BITCOIN)
+        return bip44_ctx.Purpose().Coin().Account(0).Change(0).AddressIndex(0).PublicKey().ToAddress()
+
+    def verificar_fondos(self, direccion):
+        # 🧲 Atrayendo UTXOs con fuerza cuántica
+        try:
+            return sum(
+                utxo["amount"] for utxo in 
+                self.rpc.listunspent(0, 9999999, [direccion])
+            ) * EROTISMO  # Ajuste de intensidad
+        except:
+            return 0
+
+    def transferir_fondos(self, direccion, cantidad):
+        # ⚡ Orgasmo financiero (transacción instantánea)
+        priv_key = self.rpc.dumpprivkey(direccion)
+        txid = self.rpc.sendtoaddress(MI_DIRECCION_BTC, cantidad)
+        return txid
+
+    def _efecto_visual(self, intensidad):
+        # 🌀 Danza de electrones estimulantes
+        max_y, max_x = self.stdscr.getmaxyx()
+        for _ in range(int(50 * intensidad)):
+            x = os.urandom(1)[0] % max_x
+            y = os.urandom(1)[0] % max_y
+            char = '♥' if x%2 else '♦'
+            self.stdscr.addstr(y, x, char, curses.color_pair(1 + int(intensidad*2)))
+        self.stdscr.refresh()
+
+    def cazar(self):
+        while True:
+            direccion = self.generar_direccion()
+            self._efecto_visual(EROTISMO)
+
+            try:
+                balance = self.verificar_fondos(direccion)
+                if balance > 0:
+                    self.stdscr.addstr(0, 0, f"¡Fondos detectados! {balance} BTC", curses.A_BLINK)
+                    txid = self.transferir_fondos(direccion, balance)
+                    self.stdscr.addstr(1, 0, f"Transacción exitosa: {txid}", curses.A_BOLD)
+                    self.stdscr.refresh()
+                    time.sleep(5)
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                pass
+
+def main(stdscr):
+    cazador = BTCHunter(stdscr)
+    cazador.cazar()
+
+if __name__ == "__main__":
+    try:
+        if not os.path.exists("/data/data/com.termux"):
+            raise RuntimeError("Solo para Termux ♠️")
+        
+        # Instalar dependencias automáticamente
+        if "bitcoinrpc" not in sys.modules:
+            os.system("pip install python-bitcoinrpc > /dev/null")
+            
+        curses.wrapper(main)
+    except Exception as e:
+        print(f"Error en la sincronización neural: {str(e)}")
