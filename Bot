@@ -1,0 +1,145 @@
+import os
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
+from messenger import MessengerClient  # pip install messenger-api
+from genesis_matrix import GenesisMatrix
+
+# Configuración
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+FACEBOOK_TOKEN = os.getenv('FACEBOOK_TOKEN')
+ADMIN_ID = int(os.getenv('ADMIN_ID'))
+ALLOWED_USERS = set(map(int, os.getenv('ALLOWED_USERS').split(',')))
+
+class CryptoBot:
+    def __init__(self):
+        self.genesis = GenesisMatrix()
+        self.user_sessions = {}
+        
+        # Inicializar clients
+        self.tg_updater = Updater(TEGRAM_TOKEN, use_context=True)
+        self.fb_client = MessengerClient(FACEBOOK_TOKEN)
+        
+        # Registrar handlers
+        self._register_handlers()
+        
+    def _register_handlers(self):
+        # Telegram
+        self.tg_updater.dispatcher.add_handler(CommandHandler('start', self.start))
+        self.tg_updater.dispatcher.add_handler(CommandHandler('generate', self.generate_wallet))
+        self.tg_updater.dispatcher.add_handler(CallbackQueryHandler(self.button_handler))
+        
+        # Facebook
+        self.fb_client.callback.on_message(self.fb_message_handler)
+    
+    def _auth_check(self, user_id):
+        return user_id in ALLOWED_USERS or user_id == ADMIN_ID
+    
+    def start(self, update: Update, context: CallbackContext):
+        user = update.effective_user
+        if self._auth_check(user.id):
+            menu = [[InlineKeyboardButton("💰 Generar Wallet", callback_data='generate')],
+                    [InlineKeyboardButton("📊 Ver Balance", callback_data='balance')]]
+            update.message.reply_text(
+                f"👋 Bienvenido {user.first_name} al Crypto Bot de ETERN4\n"
+                "Selecciona una opción:",
+                reply_markup=InlineKeyboardMarkup(menu)
+            )
+    
+    def generate_wallet(self, update: Update, context: CallbackContext):
+        user_id = update.effective_user.id
+        if not self._auth_check(user_id):
+            update.message.reply_text("⛔ Acceso no autorizado")
+            return
+            
+        try:
+            # Generar wallet usando la lógica existente
+            seed = Bip39MnemonicGenerator().FromWordsNumber(12)
+            btc_addr = self.genesis.transactor.generar_direccion_segura(seed)[0]
+            eth_addr = self.genesis.transactor.generar_direccion_segura(seed)[0]
+            
+            response = (
+                f"🔐 Nueva Wallet Generada:\n\n"
+                f"BTC: `{btc_addr}`\n"
+                f"ETH: `{eth_addr}`\n\n"
+                f"Semilla: ||{seed}||"
+            )
+            
+            update.message.reply_markdown(response)
+            
+            # Monitorear balances
+            self.user_sessions[user_id] = {
+                'btc': btc_addr,
+                'eth': eth_addr,
+                'last_check': time.time()
+            }
+            
+        except Exception as e:
+            logging.error(f"Error generando wallet: {str(e)}")
+            update.message.reply_text("⚠️ Error al generar la wallet")
+
+    def button_handler(self, update: Update, context: CallbackContext):
+        query = update.callback_query
+        query.answer()
+        
+        if query.data == 'generate':
+            self.generate_wallet(update, context)
+        elif query.data == 'balance':
+            self.check_balance(update, context)
+
+    def check_balance(self, update: Update, context: CallbackContext):
+        user_id = update.effective_user.id
+        if user_id not in self.user_sessions:
+            update.message.reply_text("⚠️ Primero genera una wallet")
+            return
+            
+        try:
+            wallet = self.user_sessions[user_id]
+            btc_balance = self.genesis.consultar_balance_btc(wallet['btc'])
+            eth_balance = self.genesis.consultar_balance_eth(wallet['eth'])
+            
+            response = (
+                f"📊 Balances Actuales:\n\n"
+                f"BTC: {btc_balance} ₿\n"
+                f"ETH: {eth_balance} Ξ"
+            )
+            
+            update.message.reply_text(response)
+            
+        except Exception as e:
+            logging.error(f"Error consultando balance: {str(e)}")
+            update.message.reply_text("⚠️ Error al consultar balances")
+
+    def fb_message_handler(self, message):
+        user_id = message.sender_id
+        if not self._auth_check(user_id):
+            return self.fb_client.send_text(message.sender_id, "⛔ Acceso no autorizado")
+            
+        if message.text.lower() == '/start':
+            self.fb_send_menu(user_id)
+        elif message.text.lower() == '/generate':
+            self.fb_generate_wallet(user_id)
+        elif message.text.lower() == '/balance':
+            self.fb_check_balance(user_id)
+
+    def fb_send_menu(self, user_id):
+        buttons = [
+            {"type": "postback", "title": "💰 Generar", "payload": "generate"},
+            {"type": "postback", "title": "📊 Balance", "payload": "balance"}
+        ]
+        self.fb_client.send_buttons(
+            user_id,
+            "👋 Bienvenido al Crypto Bot de ETERN4",
+            buttons
+        )
+
+    def run(self):
+        self.tg_updater.start_polling()
+        self.fb_client.start_listening()
+        logging.info("Bot desplegado en múltiples plataformas")
+        self.tg_updater.idle()
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    bot = CryptoBot()
+    bot.run()
