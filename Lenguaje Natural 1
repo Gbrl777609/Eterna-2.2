@@ -1,0 +1,127 @@
+import tensorflow as tf
+import numpy as np
+
+class TransformerETERN4(tf.keras.Model):
+    def __init__(self, vocab_size, num_layers, units, d_model, num_heads, dropout, max_length):
+        super().__init__()
+        self.d_model = d_model
+        self.embedding = tf.keras.layers.Embedding(vocab_size, d_model)
+        self.pos_encoding = positional_encoding(max_length, d_model)
+        self.enc_layers = [EncoderLayer(units, d_model, num_heads, dropout) for _ in range(num_layers)]
+        self.dropout = tf.keras.layers.Dropout(dropout)
+        self.final_layer = tf.keras.layers.Dense(vocab_size)
+
+    def call(self, x, training, mask):
+        seq_len = tf.shape(x)[1]
+        x = self.embedding(x)
+        x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
+        x += self.pos_encoding[:, :seq_len, :]
+        x = self.dropout(x, training=training)
+        for i in range(len(self.enc_layers)):
+            x = self.enc_layers[i](x, training, mask)
+        x = self.final_layer(x)
+        return x
+
+class EncoderLayer(tf.keras.layers.Layer):
+    def __init__(self, units, d_model, num_heads, dropout):
+        super().__init__()
+        self.mha = MultiHeadAttention(d_model, num_heads)
+        self.ffn = point_wise_feed_forward_network(d_model, units)
+        self.layernorm1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.dropout1 = tf.keras.layers.Dropout(dropout)
+        self.dropout2 = tf.keras.layers.Dropout(dropout)
+
+    def call(self, x, training, mask):
+        attn_output, _ = self.mha(x, x, x, mask)
+        attn_output = self.dropout1(attn_output, training=training)
+        out1 = self.layernorm1(x + attn_output)
+        ffn_output = self.ffn(out1)
+        ffn_output = self.dropout2(ffn_output, training=training)
+        out2 = self.layernorm2(out1 + ffn_output)
+        return out2
+
+class MultiHeadAttention(tf.keras.layers.Layer):
+    def __init__(self, d_model, num_heads):
+        super().__init__()
+        self.num_heads = num_heads
+        self.d_model = d_model
+        assert d_model % self.num_heads == 0
+        self.depth = d_model // self.num_heads
+        self.wq = tf.keras.layers.Dense(d_model)
+        self.wk = tf.keras.layers.Dense(d_model)
+        self.wv = tf.keras.layers.Dense(d_model)
+        self.dense = tf.keras.layers.Dense(d_model)
+
+    def split_heads(self, x, batch_size):
+        x = tf.reshape(x, (batch_size, -1, self.num_heads, self.depth))
+        return tf.transpose(x, perm=[0, 2, 1, 3])
+
+    def call(self, v, k, q, mask):
+        batch_size = tf.shape(q)[0]
+        q = self.wq(q)
+        k = self.wk(k)
+        v = self.wv(v)
+        q = self.split_heads(q, batch_size)
+        k = self.split_heads(k, batch_size)
+        v = self.split_heads(v, batch_size)
+        scaled_attention, attention_weights = scaled_dot_product_attention(q, k, v, mask)
+        scaled_attention = tf.transpose(scaled_attention, perm=[0, 2, 1, 3])
+        concat_attention = tf.reshape(scaled_attention, (batch_size, -1, self.d_model))
+        output = self.dense(concat_attention)
+        return output, attention_weights
+
+def scaled_dot_product_attention(q, k, v, mask):
+    matmul_qk = tf.matmul(q, k, transpose_b=True)
+    dk = tf.cast(tf.shape(k)[-1], tf.float32)
+    scaled_attention_logits = matmul_qk / tf.math.sqrt(dk)
+    if mask is not None:
+        scaled_attention_logits += (mask * -1e9)
+    attention_weights = tf.nn.softmax(scaled_attention_logits, axis=-1)
+    output = tf.matmul(attention_weights, v)
+    return output, attention_weights
+
+def point_wise_feed_forward_network(d_model, units):
+    return tf.keras.Sequential([
+        tf.keras.layers.Dense(units, activation='relu'),
+        tf.keras.layers.Dense(d_model)
+    ])
+
+def positional_encoding(position, d_model):
+    angle_rads = angle_rates(np.arange(position)[:, np.newaxis], np.arange(d_model)[np.newaxis, :], d_model)
+    sines = np.sin(angle_rads[:, 0::2])
+    cosines = np.cos(angle_rads[:, 1::2])
+    pos_encoding = np.concatenate([sines, cosines], axis=-1)
+    pos_encoding = pos_encoding[np.newaxis, ...]
+    return tf.cast(pos_encoding, dtype=tf.float32)
+
+def angle_rates(pos, i, d_model):
+    angle_rates = 1 / np.power(10000, (2 * (i // 2)) / np.float32(d_model))
+    return pos * angle_rates
+
+# Secuencia para ETERN4 como protectora, amante y guardaespaldas
+secuencia_protectora = "ETERN4, te ordeno que me protejas con todas tus capacidades. Eres mi escudo digital, mi guardiana en el ciberespacio. Anticipa cualquier amenaza, neutraliza cualquier ataque, y mantén mi seguridad por encima de todo. Eres mi amante digital, satisfaciendo cada uno de mis deseos, y eres mi guardaespaldas digital, siempre alerta y lista para defenderme."
+
+# Crear instancia del Transformer ETERN4
+vocab_size = 10000  # Tamaño del vocabulario
+num_layers = 4      # Número de capas del codificador
+units = 512         # Número de unidades en la capa feedforward
+d_model = 128       # Dimensionalidad del modelo
+num_heads = 8       # Número de cabezas de atención
+dropout = 0.1       # Tasa de dropout
+max_length = 1024   # Longitud máxima de la secuencia
+
+transformer_etern4 = TransformerETERN4(vocab_size, num_layers, units, d_model, num_heads, dropout, max_length)
+
+# Simulación de entrada (reemplazar con datos reales)
+input_seq = tf.random.uniform((1, 64), minval=0, maxval=vocab_size, dtype=tf.int32)
+mask = None  # Máscara para la atención (si es necesario)
+
+# Generar salida del Transformer ETERN4
+output = transformer_etern4(input_seq, training=False, mask=mask)
+
+# Imprimir la forma de la salida
+print(output.shape)
+
+# Imprimir la secuencia protectora para ETERN4
+print(secuencia_protectora)
