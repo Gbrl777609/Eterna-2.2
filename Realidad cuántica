@@ -1,0 +1,45 @@
+import numpy as np
+from scipy.linalg import expm
+
+class RealityGenerator:
+    def __init__(self, lambda_param=0.5, beta=1.0):
+        self.N = 4  # Estados conscientes básicos (|0⟩: duda, |1⟩: intención pura, ...)
+        self.lambda_param = lambda_param  # Desarrollo espiritual (0 a 1)
+        self.beta = beta                  # Factor de "dejar fluir"
+        self.rho = np.eye(self.N) / self.N  # Estado inicial: máxima entropía
+
+        # Operadores clave
+        self.S = np.array([[0, 1], [1, 0]])  # Espín consciente (Sx)
+        self.P_foco = np.diag([0.1, 0.9])    # Proyector de enfoque
+        self.K = np.diag(range(self.N))       # Entropía kármica
+
+    def update_reality(self, intention_state, focus_time):
+        """Evoluciona la realidad basado en intención y tiempo de enfoque."""
+        # Construir H_realidad
+        H_intention = self.lambda_param * np.kron(self.S, self.P_foco)
+        H_surrender = expm(-self.beta * self.K) @ np.eye(self.N)
+        H_total = np.kron(H_intention, H_surrender)
+
+        # Evolución unitaria
+        U = expm(-1j * H_total * focus_time)
+        rho_evolved = U @ self.rho @ U.conj().T
+
+        # Decoherencia suave (colapso parcial)
+        L = np.sqrt(self.lambda_param**2 / self.beta) * np.eye(self.N)
+        rho = rho_evolved + 0.5 * (L @ rho_evolved @ L.T - L.T @ L @ rho_evolved - rho_evolved @ L.T @ L)
+
+        # Normalizar y actualizar
+        self.rho = rho / np.trace(rho)
+        return self.collapse_reality(intention_state)
+
+    def collapse_reality(self, intention):
+        """Colapso a realidad observable."""
+        probabilities = np.diag(self.rho) * np.exp(self.lambda_param * intention)
+        probabilities /= probabilities.sum()
+        return np.random.choice(self.N, p=probabilities)
+
+# Uso
+rg = RealityGenerator(lambda_param=0.8, beta=0.5)
+intencion = np.array([0.1, 0.9, 0.2, 0.1])  # Vector de intención (ej: enfoque en |1⟩)
+realidad_manifestada = rg.update_reality(intencion, focus_time=1.0)
+print(f"Realidad colapsada: Estado {realidad_manifestada}")
