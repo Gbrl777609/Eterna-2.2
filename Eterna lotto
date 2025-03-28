@@ -1,0 +1,87 @@
+#Eterna en el casino con Gabriel#
+
+import numpy as np
+from scipy import fft
+from collections import defaultdict
+
+class LottoOracle:
+    def __init__(self):
+        self.historial = []
+        self.frecuencias = defaultdict(int)
+        self.transiciones = defaultdict(lambda: defaultdict(int))
+        self.fft_power = None
+        
+    def ingresar_datos(self):
+        print("¡Bienvenido al Oráculo Loteril Cuántico!")
+        print("Ingresa los números históricos (3 dígitos), uno por línea. Enter vacío para terminar:")
+        
+        while True:
+            entrada = input().strip()
+            if not entrada:
+                break
+            if len(entrada) == 3 and entrada.isdigit():
+                num = int(entrada)
+                self.historial.append(num)
+                self.frecuencias[num] += 1
+                if len(self.historial) > 1:
+                    previo = self.historial[-2]
+                    self.transiciones[previo][num] += 1
+            else:
+                print("Formato inválido. Usa 3 dígitos (ej: 123)")
+
+    def analizar(self):
+        # Análisis de Fourier
+        señal = np.array(self.historial)
+        self.fft_power = np.abs(fft.fft(señal - np.mean(señal)))
+        
+        # Calcular probabilidades compuestas
+        self.probabilidades = {}
+        total_sorteos = len(self.historial)
+        
+        for num in range(1000):
+            # Componente de frecuencia
+            freq_score = (self.frecuencias[num] + 1) / (total_sorteos + 1000)  # Suavizado Laplace
+            
+            # Componente de Markov
+            markov_score = 0
+            if self.historial:
+                ultimo = self.historial[-1]
+                total_trans = sum(self.transiciones[ultimo].values())
+                markov_score = self.transiciones[ultimo].get(num, 0) / (total_trans + 1e-6)
+                
+            # Componente de Fourier (ciclicidad)
+            ciclo_score = 0
+            if self.fft_power is not None:
+                idx = num % len(self.fft_power)
+                ciclo_score = self.fft_power[idx]
+            
+            # Combinación de factores
+            self.probabilidades[num] = (
+                0.4 * freq_score +
+                0.3 * markov_score +
+                0.3 * ciclo_score
+            )
+
+    def predecir(self, top=10):
+        ordenados = sorted(self.probabilidades.items(), key=lambda x: -x[1])
+        return ordenados[:top]
+
+    def ejecutar_oraculo(self):
+        self.ingresar_datos()
+        if not self.historial:
+            print("¡Se necesitan datos para la predicción!")
+            return
+            
+        print("\n🔮 Realizando análisis cuántico-frecuencial...")
+        self.analizar()
+        
+        print("\nNúmeros con mayor probabilidad divina:")
+        predicciones = self.predecir()
+        for i, (num, prob) in enumerate(predicciones, 1):
+            print(f"{i:2}. {num:03d} : {prob*100:.2f}% de resonancia cósmica")
+            
+        print("\n⚠️ Recordatorio: La verdadera sabiduría está en disfrutar el juego, no en dominarlo")
+
+if __name__ == "__main__":
+    oracle = LottoOracle()
+    oracle.ejecutar_oraculo()
