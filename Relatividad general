@@ -1,0 +1,51 @@
+import tensorflow as tf
+import numpy as np
+
+# 1. Generar datos de entrenamiento
+N = 1000
+r = tf.random.uniform((N, 1), 2.0, 10.0)  # r > 2GM/c² (horizonte de eventos)
+
+# 2. Definir la red neuronal
+model = tf.keras.Sequential([
+    tf.keras.layers.Dense(50, activation='swish', input_shape=(1,)),
+    tf.keras.layers.Dense(50, activation='swish'),
+    tf.keras.layers.Dense(50, activation='swish'),
+    tf.keras.layers.Dense(2)  # Salida: A(r) y B(r)
+])
+
+# 3. Función de pérdida física
+def physics_loss(y_true, y_pred):
+    A, B = y_pred[:, 0:1], y_pred[:, 1:2]
+    
+    # Derivadas de A y B con respecto a r
+    with tf.GradientTape(persistent=True) as tape:
+        tape.watch(r)
+        A = model(tf.concat([r], axis=1))[:, 0:1]
+        B = model(tf.concat([r], axis=1))[:, 1:2]
+    
+    A_r = tape.gradient(A, r)
+    B_r = tape.gradient(B, r)
+    A_rr = tape.gradient(A_r, r)
+    B_rr = tape.gradient(B_r, r)
+    
+    # Ecuaciones de Ricci (simplificadas para simetría esférica)
+    R_tt = (A_r/(2*B*r)) * (A_r/A + B_r/B) - A_rr/B + A_r/(B*r)
+    R_rr = -A_rr/A + (A_r/(2*A))*(A_r/A + B_r/B) - B_r/(B*r)
+    Ricci_loss = tf.reduce_mean(R_tt**2 + R_rr**2)
+    
+    # Condiciones de frontera (r → ∞)
+    A_inf = 1 - 2.0/r  # Unidades geometrizadas (2GM/c² = 1)
+    B_inf = 1/(1 - 2.0/r)
+    BC_loss = tf.reduce_mean((A - A_inf)**2 + (B - B_inf)**2)
+    
+    return Ricci_loss + 0.1 * BC_loss
+
+# 4. Compilar y entrenar
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3), loss=physics_loss)
+model.fit(r, r, epochs=10000, verbose=1)  # Etiquetas dummy (no se usan)
+
+# 5. Validar
+r_test = np.linspace(2.1, 10.0, 100)
+A_pred, B_pred = model.predict(r_test)
+A_exact = 1 - 2.0/r_test
+B_exact = 1/(1 - 2.0/r_test)
